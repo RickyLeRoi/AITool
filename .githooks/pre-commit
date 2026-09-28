@@ -1,0 +1,43 @@
+#!/bin/sh
+# .githooks/pre-commit
+# 20260928 ++ RG #secret_scan_precommit
+# Blocks a commit if core/find_secrets.py finds anything. Reuses the same
+# heuristic scanner exposed as the insights.scan_secrets MCP tool - see
+# project CLAUDE.md. Not a substitute for a real secret scanner.
+#
+# tests/test_find_secrets.py intentionally contains fake credential fixtures
+# to verify the scanner itself works - those are expected findings, filtered
+# out below so they don't block every commit.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+    PY=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then
+    PY=".venv/bin/python"
+else
+    echo "pre-commit: .venv not found, skipping secret scan (run pip install -r requirements.txt)" >&2
+    exit 0
+fi
+
+RESULT=$("$PY" core/find_secrets.py . 2>&1) || {
+    echo "pre-commit: find_secrets.py failed to run:" >&2
+    echo "$RESULT" >&2
+    exit 1
+}
+
+FILTERED=$(printf '%s\n' "$RESULT" | grep -v 'test_find_secrets\.py' || true)
+FINDINGS=$(printf '%s\n' "$FILTERED" | grep -c '^\[' || true)
+
+if [ "$FINDINGS" -eq 0 ]; then
+    exit 0
+fi
+
+echo "pre-commit: potential hardcoded secrets found, commit blocked:" >&2
+printf '%s\n' "$FILTERED" >&2
+echo "" >&2
+echo "Review the findings above. If they are false positives, commit with 'git commit --no-verify' (use sparingly)." >&2
+exit 1

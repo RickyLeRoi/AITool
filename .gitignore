@@ -1,0 +1,20 @@
+# Local secrets/config - never commit, see .env.example
+.env
+
+# 20260928 ++ RG #keep_local_notes_out_of_public_repo
+CLAUDE.md
+PLAN.md
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node - recreated by "npm install" (package.json/package-lock.json ARE committed)
+node_modules/
+
+# MCP Toolbox for Databases - binary (Windows .exe / macOS+Linux no extension)
+# + local config likely hold connection strings/creds
+tools/toolbox
+tools/toolbox.exe
+tools.yaml

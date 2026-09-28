@@ -1,0 +1,8 @@
+{
+  "name": "claudelocaltools-node-mcp",
+  "private": true,
+  "description": "Node-based MCP servers vendored locally so cloning this repo + running 'npm install' brings them back, same as .venv/requirements.txt does for the Python ones.",
+  "dependencies": {
+    "@playwright/mcp": "^0.0.82"
+  }
+}

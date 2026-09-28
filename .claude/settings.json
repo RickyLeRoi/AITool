@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log)",
+      "Bash(git log *)",
+      "Bash(git remote -v)",
+      "Bash(git remote show *)",
+      "PowerShell(git status)",
+      "PowerShell(git status *)",
+      "PowerShell(git diff)",
+      "PowerShell(git diff *)",
+      "PowerShell(git log)",
+      "PowerShell(git log *)",
+      "PowerShell(git remote -v)",
+      "Bash(.venv/Scripts/python.exe -m unittest *)",
+      "Bash(.venv/Scripts/python.exe core/*)",
+      "PowerShell(.venv\\Scripts\\python.exe -m unittest *)",
+      "PowerShell(.venv\\Scripts\\python.exe core\\*)",
+      "mcp__devtools__run_tests",
+      "mcp__devtools__map_repo",
+      "mcp__devtools__diff_summary",
+      "mcp__devtools__digest_log",
+      "mcp__insights__scan_secrets",
+      "mcp__insights__scan_todos",
+      "mcp__insights__list_dependencies",
+      "mcp__insights__dump_schema",
+      "mcp__insights__status_report",
+      "mcp__insights__fetch",
+      "mcp__oracledb__list_tables",
+      "mcp__oracledb__list_active_sessions",
+      "mcp__oracledb__get_query_plan",
+      "mcp__oracledb__list_top_sql_by_resource",
+      "mcp__oracledb__list_tablespace_usage",
+      "mcp__oracledb__list_invalid_objects"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(git commit*)",
+      "Bash(git reset*)",
+      "Bash(git clean*)",
+      "mcp__oracledb__execute_sql"
+    ]
+  }
+}
