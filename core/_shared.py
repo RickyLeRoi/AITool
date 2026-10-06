@@ -2,6 +2,7 @@
 """Shared helpers for the local digest tools."""
 import os
 import re
+import signal
 import subprocess
 
 # 20260926 ++ RG #dotenv_config: project root, one level up from core/
@@ -44,17 +45,53 @@ def load_dotenv(path: str = _DOTENV_PATH) -> None:
             os.environ[key] = value
 
 
-def run_command(cmd: str, cwd: str, timeout: int = 300) -> tuple[int, str]:
-    """Run a shell command, return (exit_code, combined stdout+stderr)."""
-    proc = subprocess.run(
+TIMEOUT_EXIT_CODE = 124
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+        )
+    else:
+        os.killpg(proc.pid, signal.SIGKILL)
+
+
+def run_command(cmd: str, cwd: str, timeout: int = 300, env: dict | None = None) -> tuple[int, str]:
+    """Run a shell command, return (exit_code, combined stdout+stderr).
+
+    On timeout the whole process tree is killed and exit code 124 is returned
+    with whatever output was captured. `env` entries are added on top of the
+    current environment, not a replacement for it.
+    """
+    # 20261006 ** RG #mcp_stdin_hang: under an MCP stdio server the inherited
+    # stdin is the JSON-RPC pipe; on Windows a child touching it blocks behind
+    # the server's pending read forever. shell=True also leaves the real command
+    # as a grandchild, so killing only the shell kept the pipes open on timeout.
+    proc = subprocess.Popen(
         cmd,
         cwd=cwd,
         shell=True,
-        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=timeout,
+        errors="replace",
+        start_new_session=os.name != "nt",
+        env={**os.environ, **env} if env else None,
     )
-    return proc.returncode, proc.stdout + proc.stderr
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+        return proc.returncode, stdout + stderr
+    except subprocess.TimeoutExpired:
+        _kill_tree(proc)
+        try:
+            stdout, stderr = proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            stdout, stderr = "", ""
+        return TIMEOUT_EXIT_CODE, f"{stdout}{stderr}\n[timeout after {timeout}s, process tree killed]"
 
 
 def cap(text: str, max_chars: int = 2000) -> str:

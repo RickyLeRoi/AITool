@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -42,6 +43,18 @@ class TestRunCommand(unittest.TestCase):
         code, output = run_command('python -c "print(1)"', cwd=".")
         self.assertEqual(code, 0)
         self.assertIn("1", output)
+
+    def test_child_gets_empty_stdin_not_the_parent_pipe(self):
+        code, output = run_command('python -c "import sys; print(repr(sys.stdin.read()))"', cwd=".")
+        self.assertEqual(code, 0)
+        self.assertIn("''", output)
+
+    def test_timeout_kills_the_whole_tree_and_returns_124(self):
+        start = time.monotonic()
+        code, output = run_command('python -c "import time; time.sleep(30)"', cwd=".", timeout=2)
+        self.assertEqual(code, 124)
+        self.assertIn("timeout after 2s", output)
+        self.assertLess(time.monotonic() - start, 20)
 
     def test_captures_nonzero_exit_code(self):
         code, _ = run_command('python -c "import sys; sys.exit(3)"', cwd=".")

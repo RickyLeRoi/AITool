@@ -79,11 +79,13 @@ would break everything — see `CLAUDE.md`).
 
 | Tool | What it does, in one sentence |
 |---|---|
-| `run_tests` | Runs the test command you give it (e.g. `pytest`) and returns a short summary: how many pass, which fail and why — instead of dumping 500 lines of output on you |
+| `run_tests` | Runs the test command you give it (e.g. `pytest`, `dotnet test`) and returns a short summary: the totals (`passed`/`failed`/`skipped`/`total`), which fail and why — instead of dumping 500 lines of output on you. If it doesn't recognize the format it says so instead of making numbers up |
 | `run_build` | Same as above but for a build/compile step: lists only errors and warnings, deduplicated |
 | `map_repo` | Draws a map of the project: files, folders, and each file's main functions/classes |
 | `digest_log` | Takes a long log file and tells you which lines repeat the most (useful for finding the error that's spamming the log) |
 | `diff_summary` | Looks at not-yet-committed git changes and tells you what changed, in summary |
+| `prune_usings` | (.NET) Finds unnecessary C# `using` directives by building the solution with rule IDE0005 forced on, regardless of the solution's own config. By default it only shows what it would remove; with `apply=True` it deletes the lines without touching CRLF/BOM. If the build fails it touches nothing |
+| `move_and_rename` | (.NET) Moves files and renames namespaces from a JSON map (`{"moves": [{"from": ..., "to": ...}], "namespaces": {"Old.Ns": "New.Ns"}}`). Works on raw bytes: CRLF, BOM and "weird" characters stay identical; updates the `// path` header line of moved files. By default it only shows the plan; with `apply=True` it runs it (using `git mv` for tracked files) |
 
 ### `insights` server — analysis and reporting
 
@@ -93,6 +95,7 @@ would break everything — see `CLAUDE.md`).
 | `scan_secrets` | Scans the code for passwords/keys/tokens accidentally left "in the clear" |
 | `scan_todos` | Collects every `TODO`, `FIXME`, `HACK` comment scattered across the project |
 | `list_dependencies` | Lists the libraries the project depends on (from `package.json`, `requirements.txt`, `.csproj`) |
+| `project_graph` | (.NET) Draws the `ProjectReference` graph between `.csproj` files: flags cycles, references to missing projects and, if you give it the layers (e.g. `"Utility; DB,FS,Connector; *; BusinessLogic; WebApi"`), references that "climb" to a higher layer |
 | `dump_schema` | Opens a database (or a `.sql` file) and lists its tables and columns |
 | `status_report` | An executive summary of the project: files, recent commits, pending changes, and optionally whether tests/build pass |
 
@@ -198,7 +201,7 @@ for more detail.
 
 (Pattern: `tests.<file_name_without_.py>.<ClassName>.<method_name>`)
 
-### What each test file checks (72 tests total)
+### What each test file checks (131 tests total)
 
 | Test file | What it verifies |
 |---|---|
@@ -209,12 +212,15 @@ for more detail.
 | `test_find_secrets.py` | That detection of credentials left "in the clear" works and avoids obvious false alarms |
 | `test_local_llm_client.py` | Client for the local model: no hardcoded defaults in the code (missing variables → `[local-llm not configured]`, never a network attempt), `Authorization` header sent only when the key is configured, distinguishing "not configured"/"unreachable"/"unauthorized", and `local_status()` — all with fake network calls, no real request ever leaves the PC |
 | `test_log_digest.py` | That the count of most-frequent log lines is correct |
+| `test_move_rename.py` | Namespace renaming (prefixes, boundaries, paths and `<AssemblyName>` left alone), identical bytes outside the replacements (CRLF, BOM, mojibake), header update, refusing everything if a target file already exists, `git mv` |
 | `test_oracle_config_sync.py` | That `${VAR}` placeholder substitution in the Oracle template works, that missing values with no default raise a clear error, and above all that an `.env` change shows up immediately on the next regeneration (the core of the "hot reload" mechanism) |
+| `test_project_graph.py` | `.csproj` graph: cycles, missing references, layers (same layer allowed, upward not), `bin`/`obj` ignored |
 | `test_project_status.py` | That the project summary report assembles the other functions correctly |
+| `test_prune_usings.py` | Reading SARIF logs (multi-line spans, multiple target frameworks), byte-level line deletion, patching and restoring `.editorconfig` even if the build blows up, no changes when the build fails — with a fake build, no dotnet needed |
 | `test_repo_map.py` | That the repository map (files/functions) is correct |
 | `test_schema_digest.py` | Reading a schema from a `.sqlite` file and from a `.sql` file |
-| `test_shared.py` | The common helper functions (output truncation, line deduplication, running commands) and the two `.env` functions (`parse_dotenv`, `load_dotenv`) |
-| `test_test_digest.py` | That the test summary (passed/failed) is extracted correctly, without mixing up lower-/upper-case lines |
+| `test_shared.py` | The common helper functions (output truncation, line deduplication, running commands — including closed stdin and a timeout that kills the whole process tree) and the two `.env` functions (`parse_dotenv`, `load_dotenv`) |
+| `test_test_digest.py` | That the test summary (passed/failed) is extracted correctly, without mixing up lower-/upper-case lines, and that totals are read from dotnet (VSTest, `Test summary:`, MTP), unittest, pytest and jest |
 | `test_todo_scanner.py` | That TODO/FIXME/HACK/XXX are grouped correctly |
 
 ### Running a script on its own, without going through any AI assistant

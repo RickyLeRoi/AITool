@@ -80,11 +80,13 @@ delle cose al suo interno e romperebbe tutto — vedi `CLAUDE.md`).
 
 | Tool | Cosa fa, in una frase |
 |---|---|
-| `run_tests` | Lancia il comando di test che gli dai (es. `pytest`) e ti restituisce un riassunto corto: quanti passano, quali falliscono e perché — invece di scaricarti addosso 500 righe di output |
+| `run_tests` | Lancia il comando di test che gli dai (es. `pytest`, `dotnet test`) e ti restituisce un riassunto corto: i totali (`passed`/`failed`/`skipped`/`total`), quali falliscono e perché — invece di scaricarti addosso 500 righe di output. Se non riconosce il formato lo dice, non inventa numeri |
 | `run_build` | Come sopra ma per una build/compilazione: elenca solo errori e warning, senza duplicati |
 | `map_repo` | Disegna la mappa del progetto: file, cartelle, e le funzioni/classi principali di ogni file |
 | `digest_log` | Prende un file di log lungo e ti dice quali righe si ripetono di più (utile per trovare l'errore che spamma il log) |
 | `diff_summary` | Guarda le modifiche non ancora committate in git e ti dice cosa è cambiato, in sintesi |
+| `prune_usings` | (.NET) Trova gli `using` C# inutili compilando la solution con la regola IDE0005 forzata, a prescindere dalla configurazione della solution. Di default mostra solo cosa toglierebbe; con `apply=True` cancella le righe senza toccare CRLF/BOM. Se la build fallisce non tocca niente |
+| `move_and_rename` | (.NET) Sposta file e rinomina namespace partendo da una mappa JSON (`{"moves": [{"from": ..., "to": ...}], "namespaces": {"Vecchio.Ns": "Nuovo.Ns"}}`). Lavora sui byte: CRLF, BOM e caratteri "strani" restano identici; aggiorna la riga di intestazione `// percorso` dei file spostati. Di default mostra solo il piano; con `apply=True` esegue (con `git mv` per i file tracciati) |
 
 ### Server `insights` — analisi e report
 
@@ -94,6 +96,7 @@ delle cose al suo interno e romperebbe tutto — vedi `CLAUDE.md`).
 | `scan_secrets` | Cerca nel codice password/chiavi/token scritti per sbaglio "in chiaro" |
 | `scan_todos` | Raccoglie tutti i commenti tipo `TODO`, `FIXME`, `HACK` sparsi nel progetto |
 | `list_dependencies` | Elenca le librerie da cui dipende il progetto (da `package.json`, `requirements.txt`, `.csproj`) |
+| `project_graph` | (.NET) Disegna il grafo dei `ProjectReference` tra i `.csproj`: segnala cicli, riferimenti a progetti inesistenti e, se gli dai gli strati (es. `"Utility; DB,FS,Connector; *; BusinessLogic; WebApi"`), i riferimenti che "salgono" verso uno strato superiore |
 | `dump_schema` | Apre un database (o un file `.sql`) e ti elenca tabelle e colonne |
 | `status_report` | Un riassunto esecutivo del progetto: file, commit recenti, modifiche in sospeso, ed eventualmente se test/build passano |
 
@@ -199,7 +202,7 @@ come un tool qualsiasi. Approfondimento in `docs/AGENT_MODEL_ROUTING.md`.
 
 (Schema: `tests.<nome_file_senza_.py>.<NomeClasse>.<nome_metodo>`)
 
-### Cosa testa ogni file (72 test in totale)
+### Cosa testa ogni file (131 test in totale)
 
 | File di test | Cosa verifica |
 |---|---|
@@ -210,12 +213,15 @@ come un tool qualsiasi. Approfondimento in `docs/AGENT_MODEL_ROUTING.md`.
 | `test_find_secrets.py` | Che il rilevamento di credenziali "in chiaro" funzioni ed eviti falsi allarmi ovvi |
 | `test_local_llm_client.py` | Client verso il modello locale: nessun default nel codice (variabili mancanti → `[local-llm not configured]`, mai un tentativo di rete), header `Authorization` inviato solo se la chiave è configurata, distinzione tra "non configurato"/"irraggiungibile"/"non autorizzato", e `local_status()` — tutto con chiamate di rete finte, nessuna richiesta vera esce dal PC |
 | `test_log_digest.py` | Che il conteggio delle righe di log più frequenti sia corretto |
+| `test_move_rename.py` | Rinomina dei namespace (prefissi, confini, percorsi e `<AssemblyName>` lasciati stare), byte identici fuori dalle sostituzioni (CRLF, BOM, mojibake), aggiornamento dell'intestazione, rifiuto totale se un file di destinazione esiste già, `git mv` |
 | `test_oracle_config_sync.py` | Che la sostituzione dei segnaposto `${VAR}` nel template Oracle funzioni, che i valori mancanti senza default diano un errore chiaro, e soprattutto che una modifica a `.env` si veda subito nella rigenerazione successiva (il cuore del meccanismo "a caldo") |
+| `test_project_graph.py` | Grafo dei `.csproj`: cicli, riferimenti mancanti, strati (stesso strato ammesso, verso l'alto no), `bin`/`obj` ignorati |
 | `test_project_status.py` | Che il report riassuntivo del progetto assembli bene le altre funzioni |
+| `test_prune_usings.py` | Lettura dei log SARIF (blocchi di più righe, target framework multipli), cancellazione delle righe a livello di byte, modifica e ripristino dell'`.editorconfig` anche se la build esplode, nessuna modifica se la build fallisce — con la build finta, senza bisogno di dotnet |
 | `test_repo_map.py` | Che la mappa del repository (file/funzioni) sia corretta |
 | `test_schema_digest.py` | Lettura schema da file `.sqlite` e da file `.sql` |
-| `test_shared.py` | Le funzioni di supporto comuni (troncamento output, deduplica righe, esecuzione comandi) e le due funzioni per `.env` (`parse_dotenv`, `load_dotenv`) |
-| `test_test_digest.py` | Che il riassunto dei test (passati/falliti) sia estratto bene, senza confondere righe minuscole/maiuscole |
+| `test_shared.py` | Le funzioni di supporto comuni (troncamento output, deduplica righe, esecuzione comandi — incluso stdin chiuso e timeout che uccide tutto l'albero di processi) e le due funzioni per `.env` (`parse_dotenv`, `load_dotenv`) |
+| `test_test_digest.py` | Che il riassunto dei test (passati/falliti) sia estratto bene, senza confondere righe minuscole/maiuscole, e che i totali vengano letti da dotnet (VSTest, `Test summary:`, MTP), unittest, pytest e jest |
 | `test_todo_scanner.py` | Che TODO/FIXME/HACK/XXX vengano raggruppati bene |
 
 ### Lanciare uno script da solo, senza passare da nessun assistente AI

@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "core"))
 import deps_digest
 import fetch_url
 import find_secrets
+import project_graph
 import project_status
 import schema_digest
 import todo_scanner
@@ -45,6 +46,18 @@ def list_dependencies(root: str = ".") -> str:
     """List declared dependencies from package.json, requirements.txt or *.csproj
     in the given directory."""
     return deps_digest.digest(root)
+
+
+@mcp.tool(name="project_graph")
+def project_graph_tool(root: str = ".", layers: str = "") -> str:
+    """Graph of ProjectReference edges between all .csproj under root: cycles,
+    dangling references and, if `layers` is given, upward references.
+    `layers` is ordered lowest first, ';' between layers, ',' between tokens,
+    e.g. "Utility; DB,FS,Connector; *; BusinessLogic; WebApi". A token matches
+    a dot-separated segment of the project name (or the whole name if it has
+    a glob wildcard); '*' is every project matched by no other token.
+    Same-layer references are allowed."""
+    return project_graph.digest(root, layers)
 
 
 @mcp.tool()
