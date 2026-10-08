@@ -202,7 +202,7 @@ come un tool qualsiasi. Approfondimento in `docs/AGENT_MODEL_ROUTING.md`.
 
 (Schema: `tests.<nome_file_senza_.py>.<NomeClasse>.<nome_metodo>`)
 
-### Cosa testa ogni file (131 test in totale)
+### Cosa testa ogni file (151 test in totale)
 
 | File di test | Cosa verifica |
 |---|---|
@@ -214,7 +214,7 @@ come un tool qualsiasi. Approfondimento in `docs/AGENT_MODEL_ROUTING.md`.
 | `test_local_llm_client.py` | Client verso il modello locale: nessun default nel codice (variabili mancanti → `[local-llm not configured]`, mai un tentativo di rete), header `Authorization` inviato solo se la chiave è configurata, distinzione tra "non configurato"/"irraggiungibile"/"non autorizzato", e `local_status()` — tutto con chiamate di rete finte, nessuna richiesta vera esce dal PC |
 | `test_log_digest.py` | Che il conteggio delle righe di log più frequenti sia corretto |
 | `test_move_rename.py` | Rinomina dei namespace (prefissi, confini, percorsi e `<AssemblyName>` lasciati stare), byte identici fuori dalle sostituzioni (CRLF, BOM, mojibake), aggiornamento dell'intestazione, rifiuto totale se un file di destinazione esiste già, `git mv` |
-| `test_oracle_config_sync.py` | Che la sostituzione dei segnaposto `${VAR}` nel template Oracle funzioni, che i valori mancanti senza default diano un errore chiaro, e soprattutto che una modifica a `.env` si veda subito nella rigenerazione successiva (il cuore del meccanismo "a caldo") |
+| `test_oracle_config_sync.py` | Che la sostituzione dei segnaposto `${VAR}` nel template Oracle funzioni, che i valori mancanti senza default diano un errore chiaro, e soprattutto che una modifica a `.env` si veda subito nella rigenerazione successiva (il cuore del meccanismo "a caldo"). In più: la priorità tra le tre opzioni di connessione (stringa completa > host+utente+password > user-secrets .NET), lo spacchettamento delle stringhe .NET, errori chiari per le opzioni compilate a metà senza mai stampare la password, e che `--watch` sopravviva a una config sbagliata tenendo l'ultima funzionante |
 | `test_project_graph.py` | Grafo dei `.csproj`: cicli, riferimenti mancanti, strati (stesso strato ammesso, verso l'alto no), `bin`/`obj` ignorati |
 | `test_project_status.py` | Che il report riassuntivo del progetto assembli bene le altre funzioni |
 | `test_prune_usings.py` | Lettura dei log SARIF (blocchi di più righe, target framework multipli), cancellazione delle righe a livello di byte, modifica e ripristino dell'`.editorconfig` anche se la build esplode, nessuna modifica se la build fallisce — con la build finta, senza bisogno di dotnet |
@@ -618,7 +618,9 @@ da rifare.
 ```
 
 Oppure, se preferisci non doverci pensare: lascia questo comando aperto in
-un terminale e farà tutto da solo ogni volta che salvi `.env` (fermalo con
+un terminale e farà tutto da solo ogni volta che salvi `.env` (o cambiano
+gli user-secrets, se li usi) — e se salvi una config sbagliata te lo dice e
+tiene l'ultima funzionante (fermalo con
 Ctrl+C quando non ti serve più):
 
 ```bash
@@ -642,7 +644,8 @@ chmod +x tools/toolbox
 curl -L -o tools\toolbox.exe "https://storage.googleapis.com/mcp-toolbox-for-databases/v1.13.1/windows/amd64/toolbox.exe"
 ```
 
-Le credenziali vivono **solo in `.env`** (gitignorato) e, di riflesso, nel
+Le credenziali vivono **solo in `.env`** (gitignorato) o negli user-secrets
+.NET (fuori dal progetto) e, di riflesso, nel
 `tools.yaml` generato dallo script (gitignorato anche lui) — mai in un file
 che finisce nel repository. Registrazione (identica su tutti gli OS, cambia
 solo l'estensione del programma — e da fare **una volta sola**, non ogni
@@ -657,10 +660,25 @@ claude mcp add --scope user oracledb -- /percorso/ClaudeLocalTools/tools/toolbox
 claude mcp add --scope user oracledb -- c:\Tools\Workspace\Auth\Projects\ClaudeLocalTools\tools\toolbox.exe --config c:\Tools\Workspace\Auth\Projects\ClaudeLocalTools\tools.yaml --stdio
 ```
 
-Se hai una stringa di connessione in stile .NET (`Data Source=(DESCRIPTION=
-...);USER ID=x;PASSWORD=y`), va spacchettata prima: `ORACLE_CONNECTION_STRING`
-in `.env` vuole solo la parte `HOST:PORTA/SERVICE_NAME`, utente e password
-vanno nelle due variabili separate — dammela così com'è e la spacchetto io.
+Ci sono tre modi per dirgli a quale database collegarsi — vince il **primo**
+compilato, gli altri vengono ignorati:
+
+1. `ORACLE_CONNECTION_STRING` — la stringa di connessione completa in stile
+   .NET, così come ce l'hai (`Data Source=(DESCRIPTION=...);USER ID=x;PASSWORD=y`).
+   Niente più spacchettamento a mano: ci pensa lo script.
+2. `ORACLE_HOST` (`host:porta/service`) + `ORACLE_USERNAME` + `ORACLE_PASSWORD`.
+3. `ORACLE_USER_SECRETS_ID` + `ORACLE_SECRET_NAME` — il nome di una voce
+   degli user-secrets di un progetto .NET (quelli che imposti con
+   `dotnet user-secrets set "YSL_USER[QA@OP]" "Data Source=..."`). Così
+   nel `.env` non finisce nemmeno la password: viene letta direttamente dal
+   `secrets.json` del progetto, e `--watch` si ricarica anche quando cambia
+   quel file.
+
+Se inizi un'opzione e la lasci a metà (es. `ORACLE_HOST` senza password)
+ricevi un errore chiaro — non passa di nascosto a quella dopo, così non ti
+ritrovi collegato a un database diverso da quello che pensavi. Un limite:
+una password che contiene `;` (tra virgolette, cosa che .NET permette) non
+è supportata.
 
 `tools.custom-example.yaml` (nel progetto) è un riferimento avanzato se un
 giorno ti servono query personalizzate oltre a quelle già pronte del

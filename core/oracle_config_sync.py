@@ -100,7 +100,8 @@ def parse_odp_connection_string(connection_string: str, source: str) -> dict:
     """Split an ODP.NET connection string into the three template vars.
     Keys are matched case- and whitespace-insensitively ("USER ID" ==
     "User Id"). `source` only labels error messages - the value itself is
-    never echoed, since it carries a password."""
+    never echoed, since it carries a password. Known limit: ODP.NET's
+    quoted values (Password="a;b") aren't supported - a ';' always splits."""
     fields = {}
     for part in connection_string.split(";"):
         key, sep, value = part.partition("=")

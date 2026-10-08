@@ -1,4 +1,5 @@
 # tests/test_oracle_config_sync.py
+import io
 import json
 import os
 import shutil
@@ -32,6 +33,10 @@ _TEMPLATE = (
     "user: ${ORACLE_USERNAME}\n"
     "password: ${ORACLE_PASSWORD}\n"
 )
+
+
+class _StopWatching(Exception):
+    pass
 
 
 class TestOracleConfigSync(unittest.TestCase):
@@ -217,6 +222,26 @@ class TestOracleConfigSync(unittest.TestCase):
         self.assertEqual(oracle_config_sync.watched_paths(self.env_path), [self.env_path])
         self._write_env("ORACLE_USER_SECRETS_ID=g\n")
         self.assertEqual(oracle_config_sync.watched_paths(self.env_path), [self.env_path, self.secrets_path])
+
+    def test_watch_survives_a_broken_config_and_keeps_the_last_good_output(self):
+        self._write_template(_TEMPLATE)
+        self._write_env("ORACLE_HOST=good:1/s\nORACLE_USERNAME=u\nORACLE_PASSWORD=p\n")
+
+        def break_env_then_stop(_interval):
+            if sleep.call_count == 1:
+                self._write_env("ORACLE_HOST=bad:1/s\nORACLE_USERNAME=u\n")
+                os.utime(self.env_path, (0, 0))
+                return
+            raise _StopWatching
+
+        with patch.object(oracle_config_sync.time, "sleep", side_effect=break_env_then_stop) as sleep, \
+                patch("sys.stdout", new_callable=io.StringIO) as out:
+            with self.assertRaises(_StopWatching):
+                oracle_config_sync.watch(self.template_path, self.output_path, self.env_path, interval=0)
+
+        self.assertEqual(sleep.call_count, 2)
+        self.assertIn("connectionString: good:1/s\n", self._read_output())
+        self.assertIn("Not regenerated: ORACLE_HOST is set but ORACLE_PASSWORD is not", out.getvalue())
 
     def test_uses_default_when_var_missing_everywhere(self):
         self._write_template("useOCI: ${ORACLE_USE_OCI:false}\n")
